@@ -20,11 +20,15 @@ for key, rec in prog.get("made", {}).items():
     plan = json.load(open(os.path.join(post, "plan.json")))
     slides = sorted(glob.glob(os.path.join(post, "[0-9][0-9]-*.jpg")))
     reel = os.path.join(post, "reel.mp4")
-    subprocess.run([sys.executable, os.path.join(here, "reel.py"), post, reel, logo], check=True)
+    import shutil
+    has_reel = False
+    if shutil.which("ffmpeg"):
+        subprocess.run([sys.executable, os.path.join(here, "reel.py"), post, reel, logo], check=True)
+        has_reel = True
     keys = []
     for s in slides:
         k = f"posts/{slug}/slides/{os.path.basename(s)}"; pc.put_file(s, k, "image/jpeg"); keys.append(k)
-    pc.put_file(reel, f"posts/{slug}/reel.mp4", "video/mp4")
+    if has_reel: pc.put_file(reel, f"posts/{slug}/reel.mp4", "video/mp4")
     # reel sources (so a Reel can be re-cut in the cloud to another song's tempo), downscaled to 6000 px
     from PIL import Image
     Image.MAX_IMAGE_PIXELS = None
@@ -39,9 +43,10 @@ for key, rec in prog.get("made", {}).items():
     meta = {"key": key, "slug": slug, "name": rec["name"], "species": plan.get("species"),
             "location": " / ".join(parts[:3]) if len(parts) > 1 else "", "alt_text": plan.get("alt_text", ""),
             "slides": keys, "reel": f"posts/{slug}/reel.mp4",  "caption": cap,
-            "schedule": rec.get("schedule", True), "carousel": "pending", "reel_status": "pending"}
+            "schedule": rec.get("schedule", True), "carousel": "pending",
+            "reel_status": "pending" if has_reel else "needs_build"}
     pc.put_json(f"posts/{slug}/meta.json", meta)
     state["posts"] = [p for p in state["posts"] if p["key"] != key] + [meta]
-    print("uploaded", slug, len(keys), "slides + reel")
+    print("uploaded", slug, len(keys), "slides" + (" + reel" if has_reel else " (Reel built later in the cloud)"))
 pc.put_json("state/posts.json", state)
 print("posting list:", sum(1 for p in state["posts"] if p["schedule"] and p["carousel"] == "pending"), "carousels waiting")

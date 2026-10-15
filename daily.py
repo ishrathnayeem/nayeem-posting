@@ -72,6 +72,23 @@ elif cmd == "recut":
     if not os.path.exists("logo.png"): pc.get_file("code/logo.png", "logo.png")
     subprocess.run([sys.executable, f"{here}/reel.py", d, "today/reel.mp4", "logo.png", bpm], check=True)
     pc.put_file("today/reel.mp4", find(st, slug)["reel"], "video/mp4"); print("re-cut at", bpm, "bpm")
+elif cmd == "build-reels":
+    # build Reels in the cloud for posts uploaded from the Mac without ffmpeg
+    here = os.path.dirname(os.path.abspath(__file__))
+    logo = os.path.join(here, "logo.png")
+    n = 0
+    for p in st["posts"]:
+        if p.get("reel_status") != "needs_build": continue
+        d = f"src/{p['slug']}"; os.makedirs(d + "/contest", exist_ok=True)
+        for o in pc.r2().list_objects_v2(Bucket=pc.BUCKET, Prefix=f"posts/{p['slug']}/src/").get("Contents", []):
+            k = o["Key"]; nm = os.path.basename(k)
+            pc.get_file(k, f"{d}/plan.json" if nm == "plan.json" else f"{d}/contest/{nm}")
+        out = f"{d}/reel.mp4"
+        subprocess.run([sys.executable, f"{here}/reel.py", d, out, logo], check=True)
+        pc.put_file(out, f"posts/{p['slug']}/reel.mp4", "video/mp4")
+        p["reel"] = f"posts/{p['slug']}/reel.mp4"; p["reel_status"] = "pending"; save(st); n += 1
+        print("built reel", p["slug"])
+    print(n, "reels built")
 elif cmd == "carousel":
     p = find(st, sys.argv[2]); cap = cap_from(sys.argv[3] if len(sys.argv) > 3 else None, p["caption"])
     mid = pc.publish_carousel([pc.link(k) for k in p["slides"]], cap)
